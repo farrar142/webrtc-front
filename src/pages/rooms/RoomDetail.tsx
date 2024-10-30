@@ -97,7 +97,7 @@ const getOrCreatePeerConnection = async (
   websocket: CustomWebSocket,
   streams: UseValue<{ userId: string; stream: MediaStream }[]>
 ): Promise<RTCPeerConnection> => {
-  let connection = connections.get.current.userId?.connection;
+  let connection = connections.get.current[receiver]?.connection;
   if (connection) return connection;
   connection = new RTCPeerConnection();
   connection.onnegotiationneeded = () => {
@@ -129,6 +129,7 @@ const getOrCreatePeerConnection = async (
       })
     );
   };
+  connections.get.current[receiver] = { connection };
   return connection;
 };
 
@@ -209,10 +210,6 @@ const answerOfferToParticipants = ({
     const answer = await connection.createAnswer();
     await connection.setLocalDescription(answer);
 
-    connections.set((p) => ({
-      ...p,
-      [data.sender]: { connection },
-    }));
     websocket.sendMessage({
       type: 'answersdp',
       sender: user.userId,
