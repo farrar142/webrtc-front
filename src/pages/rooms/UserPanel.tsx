@@ -27,11 +27,30 @@ const UserPanel: React.FC<{
   const audioRef = createRef<HTMLAudioElement>();
   useEffect(() => {
     if (!remoteStream || !videoRef.current || !audioRef.current) return;
-    console.log(remoteStream);
-    console.log(participant);
-    if (participant.video_on) videoRef.current.srcObject = remoteStream.stream;
-    else videoRef.current.srcObject = null;
-  }, [remoteStream, participant.audio_on, participant.video_on]);
+    const video = videoRef.current;
+    const audio = audioRef.current;
+    // console.log(remoteStream);
+    // console.log(participant);
+    // if (participant.video_on) videoRef.current.srcObject = remoteStream.stream;
+    // else videoRef.current.srcObject = null;
+
+    remoteStream.stream.getTracks().forEach((track) => {
+      let isVideo = false;
+      let isAudio = true;
+      if (track.kind === 'video') {
+        isVideo = true;
+        video.srcObject = new MediaStream([track]);
+      } else if (track.kind === 'audio') {
+        isAudio = true;
+        audio.srcObject = new MediaStream([track]);
+      }
+    });
+    remoteStream.stream.onremovetrack = (e) => {
+      console.log('on ended', e.track.kind);
+      if (e.track.kind === 'video') video.srcObject = null;
+      if (e.track.kind === 'audio') audio.srcObject = null;
+    };
+  }, [remoteStream]);
   return (
     <Box>
       <Typography>{participant.username}</Typography>

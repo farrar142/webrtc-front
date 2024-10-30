@@ -3,7 +3,14 @@
 import { useRoomStore } from '#/atoms/useRoomStore';
 import { useUserStore } from '#/atoms/useUserId';
 import { UseValue, useValue } from '#/useValue';
-import { Box, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import {
+  Box,
+  IconButton,
+  Paper,
+  Stack,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import {
@@ -52,12 +59,13 @@ type UseRefState<V> = ReturnType<typeof useRefState<V>>;
 
 type Connection = {
   connection: RTCPeerConnection;
+  tracks: { video: RTCRtpSender[]; audio: RTCRtpSender[] };
   // offer: RTCSessionDescriptionInit;
 };
 type ConnectionMap = Record<string, Connection>;
 type ConnectionState = UseRefState<ConnectionMap>;
 
-const addOnCreateOffer = async ({
+const createOffer = async ({
   connection,
   websocket,
   sender,
@@ -86,9 +94,7 @@ const addStreamToConnection = ({
   stream: MediaStream;
   connection: RTCPeerConnection;
 }) => {
-  stream.getTracks().forEach((track) => {
-    connection.addTrack(track, stream);
-  });
+  return stream.getTracks().map((track) => connection.addTrack(track, stream));
 };
 const getOrCreatePeerConnection = async (
   connections: ConnectionState,
@@ -102,7 +108,7 @@ const getOrCreatePeerConnection = async (
   connection = new RTCPeerConnection();
   connection.onnegotiationneeded = () => {
     console.log('onNegotiationNeeded');
-    addOnCreateOffer({
+    createOffer({
       connection,
       sender: sender,
       receiver: receiver,
@@ -112,12 +118,14 @@ const getOrCreatePeerConnection = async (
 
   connection.ontrack = (e) => {
     console.log('received track from user', e.streams);
+    // e.streams[0].onremovetrack = (e) => {
+    //   console.log('remove track?');
+    // };
     streams.set((p) => [
       ...p.filter((_) => _.userId !== receiver),
       { userId: receiver, stream: e.streams[0] },
     ]);
   };
-
   connection.onicecandidate = (e) => {
     if (!e.candidate) return;
     websocket.send(
@@ -129,7 +137,10 @@ const getOrCreatePeerConnection = async (
       })
     );
   };
-  connections.get.current[receiver] = { connection };
+  connections.get.current[receiver] = {
+    connection,
+    tracks: { video: [], audio: [] },
+  };
   return connection;
 };
 
@@ -170,16 +181,12 @@ const sendOfferToParticipant = ({
     websocket,
     streams
   ).then(async (connection) => {
-    await addOnCreateOffer({
+    await createOffer({
       connection,
       sender: user.userId,
       receiver: participant.user_id,
       websocket,
     });
-    connections.set((p) => ({
-      ...p,
-      [participant.user_id]: { connection },
-    }));
     return connection;
   });
 };
@@ -299,23 +306,36 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
           streams: remoteStreams,
         }).then((connection) => {
           if (videoStream.ref.current) {
-            console.log('send track to late user');
-            addStreamToConnection({
+            console.log('send video track to late user');
+            const senders = addStreamToConnection({
               connection,
               stream: videoStream.ref.current,
             });
+            connections.get.current[participant.user_id].tracks.video.push(
+              ...senders
+            );
+          }
+          if (audioStream.ref.current) {
+            console.log('send audio track to late user');
+            const senders = addStreamToConnection({
+              connection,
+              stream: audioStream.ref.current,
+            });
+            connections.get.current[participant.user_id].tracks.audio.push(
+              ...senders
+            );
           }
         });
         // }
       } else if (data.type === 'userdisconnected') {
         userControlRef.current.onUserRemoved(data.sender);
         const entries = Object.entries(connections.get.current)
-          .map(([userId, { connection }]) => {
+          .map(([userId, { connection, tracks }]) => {
             if (userId === data.sender) {
               connection.close();
               return undefined;
             }
-            return [userId, { connection }] as const;
+            return [userId, { connection, tracks }] as const;
           })
           .filter((values) => values !== undefined);
         connections.set(Object.fromEntries(entries));
@@ -468,22 +488,26 @@ const WebRTCController: React.FC<{
     media: 'video' | 'audio'
   ) => {
     const already = stream.get;
-    if (already) {
-      already.getTracks().forEach((track) => {
-        track.stop();
-      });
-      stream.set(undefined);
-      websocket.sendMessage({
-        type: 'streamstatus',
-        media: media,
-        sender: user.userId,
-        status: false,
-      });
-    }
+
+    if (!already) return;
+    already.getTracks().forEach((track) => track.stop());
+
+    Object.entries(connections.get.current).forEach(
+      ([userId, { connection, tracks }]) => {
+        tracks[media].forEach((sender) => connection.removeTrack(sender));
+      }
+    );
+    stream.set(undefined);
+    websocket.sendMessage({
+      type: 'streamstatus',
+      media: media,
+      sender: user.userId,
+      status: false,
+    });
   };
   const getUserMedia = () =>
-    navigator.mediaDevices.getDisplayMedia({
-      audio: true,
+    navigator.mediaDevices.getUserMedia({
+      audio: false,
       video: true,
     });
   const getDisplayMedia = () =>
@@ -513,7 +537,6 @@ const WebRTCController: React.FC<{
         stream.set(_stream);
         if (!ref.current) return;
         ref.current.srcObject = _stream;
-        // audioRef.current.srcObject = stream;
         websocket.sendMessage({
           type: 'streamstatus',
           media: media,
@@ -521,21 +544,14 @@ const WebRTCController: React.FC<{
           status: true,
         });
         Object.entries(connections.get.current).forEach(
-          ([userId, { connection }]) => {
-            addStreamToConnection({ stream: _stream, connection });
+          ([userId, { connection, tracks }]) => {
+            const senders = addStreamToConnection({
+              stream: _stream,
+              connection,
+            });
+            tracks[media].push(...senders);
           }
         );
-        // participants
-        //   .filter((p) => p.user_id !== user.userId)
-        //   .forEach((participant) => {
-        //     connectStreamToUser({
-        //       participant,
-        //       stream: _stream,
-        //       websocket,
-        //       user,
-        //       connections,
-        //     });
-        //   });
       });
     };
 
@@ -548,31 +564,35 @@ const WebRTCController: React.FC<{
     });
   }, [videoStream.get]);
   return (
-    <Box
-      position='absolute'
-      bottom='5%'
-      left='50%'
-      sx={{ transform: 'translate(-50%);' }}
+    <Paper
+      sx={{
+        borderRadius: 3,
+        position: 'absolute',
+        bottom: '5%',
+        left: '50%',
+        transform: 'translate(-50%)',
+      }}
     >
       <Tooltip title='화면 공유'>
-        <IconButton
-          onClick={onVideoStreamStart(getUserMedia, {
-            media: 'video',
-            stream: videoStream,
-            ref: videoRef,
-          })}
-          color='warning'
-        >
-          <Tv />
-        </IconButton>
-      </Tooltip>
-      <Tooltip title='카메라 공유'>
         <IconButton
           onClick={onVideoStreamStart(getDisplayMedia, {
             media: 'video',
             stream: videoStream,
             ref: videoRef,
           })}
+          color={Boolean(videoStream.get) ? 'warning' : undefined}
+        >
+          <Tv />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title='카메라 공유'>
+        <IconButton
+          onClick={onVideoStreamStart(getUserMedia, {
+            media: 'video',
+            stream: videoStream,
+            ref: videoRef,
+          })}
+          color={Boolean(videoStream.get) ? 'warning' : undefined}
         >
           <VideoCall />
         </IconButton>
@@ -584,10 +604,11 @@ const WebRTCController: React.FC<{
             stream: audioStream,
             ref: audioRef,
           })}
+          color={Boolean(audioStream.get) ? 'warning' : undefined}
         >
           <KeyboardVoice />
         </IconButton>
       </Tooltip>
-    </Box>
+    </Paper>
   );
 };
