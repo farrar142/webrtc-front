@@ -1,7 +1,14 @@
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, IconButton, Stack, Typography } from '@mui/material';
 import { Participant } from '../types';
 import { useValue, UseValue } from '#/useValue';
 import { createRef, useEffect, useMemo } from 'react';
+import {
+  Camera,
+  KeyboardVoice,
+  MicOff,
+  Tv,
+  VideoCall,
+} from '@mui/icons-material';
 
 export const UserDisplayPanel: React.FC<{
   participants: Participant[];
@@ -27,6 +34,8 @@ const UserPanel: React.FC<{
   const videoRef = createRef<HTMLVideoElement>();
   const vidAudioRef = createRef<HTMLAudioElement>();
   const audioRef = createRef<HTMLAudioElement>();
+  const videoStream = useValue<MediaStream | undefined>(undefined);
+  const audioStream = useValue<MediaStream | undefined>(undefined);
   const isVideoOn = useValue(false);
   const isAudioOn = useValue(false);
 
@@ -48,7 +57,7 @@ const UserPanel: React.FC<{
   useEffect(() => {
     if (!remoteStream || !videoRef.current || !vidAudioRef.current) return;
     if (!isVideoStream) return;
-    isVideoOn.set(true);
+    videoStream.set(remoteStream.stream);
     const video = videoRef.current;
     const vidAudio = vidAudioRef.current;
     remoteStream.stream.getTracks().forEach((track) => {
@@ -57,7 +66,7 @@ const UserPanel: React.FC<{
     });
     video.srcObject = remoteStream.stream;
     remoteStream.stream.onremovetrack = (e) => {
-      isVideoOn.set(false);
+      videoStream.set(undefined);
       video.srcObject = null;
     };
   }, [isVideoStream, remoteStream?.stream.id]);
@@ -65,27 +74,85 @@ const UserPanel: React.FC<{
   useEffect(() => {
     if (!remoteStream || !audioRef.current) return;
     if (!isAudioStream) return;
-    isAudioOn.set(true);
+    audioStream.set(remoteStream.stream);
     const audio = audioRef.current;
     audio.srcObject = remoteStream.stream;
     remoteStream.stream.onremovetrack = (e) => {
-      isAudioOn.set(false);
+      audioStream.set(undefined);
       audio.srcObject = null;
     };
   }, [isAudioStream, remoteStream?.stream.id]);
 
   return (
-    <Box>
-      <Typography>{participant.username}</Typography>
+    <Box
+      position='relative'
+      width='100%'
+      maxWidth='100px'
+      sx={{ aspectRatio: 1 }}
+    >
       <video
         ref={videoRef}
         autoPlay
         muted
         playsInline
-        style={{ width: '200px', height: '200px', border: '1px solid red' }}
+        style={{
+          width: '100%',
+          height: '100%',
+          border: '1px solid red',
+          objectFit: 'cover',
+        }}
       />
       <audio ref={vidAudioRef} autoPlay />
       <audio ref={audioRef} autoPlay />
+      <Box
+        // 유저 이름
+        sx={[
+          {
+            width: '100%',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            px: 1,
+          },
+          {
+            display: '-webkit-box',
+            textOverflow: 'ellipsis',
+            overflow: 'hidden',
+            lineClamp: 1,
+            WebkitLineClamp: 1,
+            WebkitBoxOrient: 'vertical',
+          },
+        ]}
+      >
+        <Typography>{participant.username}</Typography>
+      </Box>
+      <Box
+        // 유저의 스트림 상황
+        sx={{
+          width: '100%',
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          px: 1,
+        }}
+      >
+        <IconButton
+          size='small'
+          color={Boolean(videoStream.get) ? 'warning' : undefined}
+        >
+          <Tv fontSize='small' />
+        </IconButton>
+        <IconButton
+          size='small'
+          color={Boolean(audioStream.get) ? 'warning' : undefined}
+        >
+          {Boolean(audioStream.get) ? (
+            <KeyboardVoice fontSize='small' />
+          ) : (
+            <MicOff fontSize='small' />
+          )}
+        </IconButton>
+      </Box>
     </Box>
   );
 };

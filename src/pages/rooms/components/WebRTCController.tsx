@@ -1,7 +1,7 @@
 import { useUserStore } from '#/atoms/useUserId';
 import { UseRefState } from '#/useRefState';
 import { UseValue } from '#/useValue';
-import { Tv, VideoCall, KeyboardVoice } from '@mui/icons-material';
+import { Tv, VideoCall, KeyboardVoice, MicOff } from '@mui/icons-material';
 import { Paper, Tooltip, IconButton } from '@mui/material';
 import { RefObject, useEffect } from 'react';
 import { addStreamToConnection } from '../connections';
@@ -138,7 +138,7 @@ export const WebRTCController: React.FC<{
           })}
           color={Boolean(audioStream.get) ? 'warning' : undefined}
         >
-          <KeyboardVoice />
+          {Boolean(audioStream.get) ? <KeyboardVoice /> : <MicOff />}
         </IconButton>
       </Tooltip>
     </Paper>
