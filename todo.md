@@ -12,3 +12,7 @@
       10. 유저가 스트리밍을 시작하면, 채널의 모든 유저들에게 자신의 sdp를 전달한다.
       11. sdp를 받은 유저들은 자신의 peerconnection에 상대의 sdp를 remotedescription으로 설정하고, answer를 생성하여 localdescription에 할당 스트리머에게 answer의 sdp를 보내준다
       12. 마지막으로 스트리머가 각 유저들의 sdp를 커넥션별로 remotedescription으로 저장하면 icecandidate시작
+      13. ontrack 이벤트가 fire하면 각 유저별 컴포넌트의 video에 srcobject로 지정
+1. 10-29
+   1. 스트림 종료 기능
+   2. 유저미디어, 유저 디스플레이, 마이크별 스트림 기능

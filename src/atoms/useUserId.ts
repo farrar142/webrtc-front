@@ -8,17 +8,19 @@ interface UserState {
   userId: string;
   username: string;
   setUsername: (username: string) => void;
+  setUserId: (id: string) => void;
 }
 export const useUserStore = create(
   persist<UserState>(
     (set) => ({
-      userId: uuid(),
+      userId: '',
       username: uuid(),
       setUsername: (username: string) => set((p) => ({ ...p, username })),
+      setUserId: (userId) => set((p) => ({ ...p, userId })),
     }),
     {
       name: 'user-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => sessionStorage),
     }
   )
 );

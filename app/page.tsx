@@ -14,7 +14,13 @@ import {
 } from '@mui/material';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
-import { ChangeEventHandler, FormEventHandler, useState } from 'react';
+import {
+  ChangeEventHandler,
+  FormEventHandler,
+  useEffect,
+  useState,
+} from 'react';
+import { v4 } from 'uuid';
 
 export default function Home() {
   const router = useRouter();
@@ -31,14 +37,19 @@ export default function Home() {
     room.setRoomId(roomname.get, password.get);
     router.push(`/${roomname.get}`);
   };
+  useEffect(() => {
+    if (user.userId) return;
+    user.setUserId(v4());
+  }, [user.userId]);
   return (
     <Container
-      sx={{
+      sx={(theme) => ({
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
         height: '100%',
-      }}
+        bgcolor: theme.palette.background.default,
+      })}
     >
       <Paper sx={{ p: 1 }}>
         <Stack spacing={1} component='form' onSubmit={onSubmit}>

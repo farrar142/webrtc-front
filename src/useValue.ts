@@ -1,7 +1,8 @@
-import { useState, ChangeEventHandler } from 'react';
+import { useState, ChangeEventHandler, useRef, useEffect } from 'react';
 
 export const useValue = <T extends any>(defaultValue: T) => {
   const [get, set] = useState(defaultValue);
+  const ref = useRef(defaultValue);
   const onTextChange: ChangeEventHandler<HTMLInputElement> = ({
     target: { value },
   }) => {
@@ -10,7 +11,11 @@ export const useValue = <T extends any>(defaultValue: T) => {
     set(value);
   };
 
-  return { get, set, onTextChange };
+  useEffect(() => {
+    ref.current = get;
+  }, [get]);
+
+  return { get, set, onTextChange, ref };
 };
 
 export type UseValue<T> = ReturnType<typeof useValue<T>>;

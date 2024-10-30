@@ -18,7 +18,7 @@ export type SendSDP = {
   type: 'sendsdp' | 'answersdp';
   sender: string;
   receiver: string;
-  sdp: string;
+  sdp?: string;
   sdp_type: RTCSdpType;
 };
 
@@ -27,6 +27,12 @@ export type SendCandidate = {
   sender: string;
   receiver: string;
   candidate: RTCIceCandidate;
+};
+export type StreamStatus = {
+  type: 'streamstatus';
+  sender: string;
+  media: 'video' | 'audio';
+  status: boolean;
 };
 //User Control
 
@@ -39,4 +45,5 @@ export type Participant = {
 export type UserController = {
   onUserAdd: (participant: Participant) => void;
   onUserRemoved: (userId: string) => void;
+  // getParticipants: () => Participant[];
 };
