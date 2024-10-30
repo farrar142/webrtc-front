@@ -50,84 +50,177 @@ const useRefState = <V extends any>(defaultValue: V) => {
 };
 type UseRefState<V> = ReturnType<typeof useRefState<V>>;
 
-const notifyParticipant = (ws: WebSocket, data: NotifyParticipant) => {
-  ws.send(JSON.stringify(data));
-};
-
 type Connection = {
   connection: RTCPeerConnection;
-  offer: RTCSessionDescriptionInit;
+  // offer: RTCSessionDescriptionInit;
 };
 type ConnectionMap = Record<string, Connection>;
 type ConnectionState = UseRefState<ConnectionMap>;
 
-const addOnIceCandidate = (
-  connection: RTCPeerConnection,
-  websocket: WebSocket,
-  { sender, receiver }: { sender: string; receiver: string }
-) => {
-  connection.onicecandidate = (e) => {
-    console.log('oncandidate');
-    if (!e.candidate) return;
-    websocket.send(
-      JSON.stringify({
-        type: 'sendcandidate',
-        sender: receiver,
-        receiver: sender,
-        candidate: e.candidate,
-      })
-    );
-  };
+const addOnCreateOffer = async ({
+  connection,
+  websocket,
+  sender,
+  receiver,
+}: {
+  connection: RTCPeerConnection;
+  websocket: CustomWebSocket;
+  sender: string;
+  receiver: string;
+}) => {
+  const offer = await connection.createOffer();
+  websocket.sendMessage({
+    type: 'sendsdp',
+    sender: sender,
+    receiver: receiver,
+    sdp: offer.sdp,
+    sdp_type: offer.type,
+  });
+  await connection.setLocalDescription(offer);
+  return offer;
 };
-
+const addStreamToConnection = ({
+  stream,
+  connection,
+}: {
+  stream: MediaStream;
+  connection: RTCPeerConnection;
+}) => {
+  stream.getTracks().forEach((track) => {
+    connection.addTrack(track, stream);
+  });
+};
 const getOrCreatePeerConnection = async (
   connections: ConnectionState,
-  userId: string
+  sender: string,
+  receiver: string,
+  websocket: CustomWebSocket,
+  streams: UseValue<{ userId: string; stream: MediaStream }[]>
 ): Promise<RTCPeerConnection> => {
   let connection = connections.get.current.userId?.connection;
   if (connection) return connection;
   connection = new RTCPeerConnection();
+  connection.onnegotiationneeded = () => {
+    console.log('onNegotiationNeeded');
+    addOnCreateOffer({
+      connection,
+      sender: sender,
+      receiver: receiver,
+      websocket,
+    });
+  };
+
+  connection.ontrack = (e) => {
+    console.log('received track from user', e.streams);
+    streams.set((p) => [
+      ...p.filter((_) => _.userId !== receiver),
+      { userId: receiver, stream: e.streams[0] },
+    ]);
+  };
+
+  connection.onicecandidate = (e) => {
+    if (!e.candidate) return;
+    websocket.send(
+      JSON.stringify({
+        type: 'sendcandidate',
+        sender: sender,
+        receiver: receiver,
+        candidate: e.candidate,
+      })
+    );
+  };
   return connection;
 };
 
-const connectStreamToUser = ({
-  stream,
+const handleParticipantStreamStatus = (
+  participants: UseValue<Participant[]>,
+  userId: string,
+  media: 'video' | 'audio',
+  status: boolean
+) => {
+  participants.set((ps) =>
+    ps.map((p) => {
+      if (p.user_id !== userId) return p;
+      if (media === 'video') return { ...p, video_on: status };
+      return { ...p, audio_on: status };
+    })
+  );
+};
+
+const sendOfferToParticipant = ({
+  // stream,
   websocket,
   participant,
   user,
   connections,
+  streams,
 }: {
-  stream: MediaStream;
+  // stream: MediaStream;
   websocket: CustomWebSocket;
   participant: Participant;
   user: { userId: string };
   connections: UseRefState<Record<string, Connection>>;
+  streams: UseValue<{ userId: string; stream: MediaStream }[]>;
+}): Promise<RTCPeerConnection> => {
+  return getOrCreatePeerConnection(
+    connections,
+    user.userId,
+    participant.user_id,
+    websocket,
+    streams
+  ).then(async (connection) => {
+    await addOnCreateOffer({
+      connection,
+      sender: user.userId,
+      receiver: participant.user_id,
+      websocket,
+    });
+    connections.set((p) => ({
+      ...p,
+      [participant.user_id]: { connection },
+    }));
+    return connection;
+  });
+};
+const answerOfferToParticipants = ({
+  connections,
+  streams,
+  data,
+  user,
+  websocket,
+}: {
+  connections: ConnectionState;
+  streams: UseValue<{ userId: string; stream: MediaStream }[]>;
+  data: SendSDP;
+  user: { userId: string };
+  websocket: CustomWebSocket;
 }) => {
-  getOrCreatePeerConnection(connections, participant.user_id).then(
-    async (connection) => {
-      stream.getTracks().forEach((track) => {
-        connection.addTrack(track, stream);
-      });
-      // connection.addTransceiver('video');
-      const offer = await connection.createOffer();
-      websocket.sendMessage({
-        type: 'sendsdp',
-        sender: user.userId,
-        receiver: participant.user_id,
-        sdp: offer.sdp,
-        sdp_type: offer.type,
-      });
-      await connection.setLocalDescription(offer);
-      addOnIceCandidate(connection, websocket, {
-        sender: participant.user_id,
-        receiver: user.userId,
-      });
-      connections.set((p) => ({
-        ...p,
-        [participant.user_id]: { connection, offer },
-      }));
-    }
-  );
+  getOrCreatePeerConnection(
+    connections,
+    user.userId,
+    data.sender,
+    websocket,
+    streams
+  ).then(async (connection) => {
+    await connection.setRemoteDescription({
+      sdp: data.sdp,
+      type: data.sdp_type,
+    });
+    const answer = await connection.createAnswer();
+    await connection.setLocalDescription(answer);
+
+    connections.set((p) => ({
+      ...p,
+      [data.sender]: { connection },
+    }));
+    websocket.sendMessage({
+      type: 'answersdp',
+      sender: user.userId,
+      receiver: data.sender,
+      sdp: answer.sdp,
+      sdp_type: answer.type,
+    });
+  });
 };
 
 export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
@@ -149,8 +242,12 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
   });
 
   useEffect(() => {
+    console.log(user.userId);
     if (user.userId) return;
-    user.setUserId(v4());
+    const timeout = setTimeout(() => {
+      user.setUserId(v4());
+    }, 100);
+    return () => clearTimeout(timeout);
   }, [user.userId]);
 
   useEffect(() => {
@@ -169,12 +266,13 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
       );
     };
     ws.parseMessage((data) => {
+      console.log(data.type);
       if (data.type === 'authentication') {
         if (data.result) {
           authenticated.set(true);
           ws.sendMessage({
             type: 'notifyparticipant',
-            user_id: user.userId,
+            sender: user.userId,
             username: user.username,
           });
           for (const participant of data.data) {
@@ -188,83 +286,74 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
         }
       } else if (data.type === 'notifyparticipant') {
         const participant = {
-          user_id: data.user_id,
+          user_id: data.sender,
           username: data.username,
           audio_on: false,
           video_on: false,
         };
         userControlRef.current.onUserAdd(participant);
-        if (videoStream.ref.current) {
-          connectStreamToUser({
-            stream: videoStream.ref.current,
-            participant,
-            websocket: ws,
-            connections,
-            user,
-          });
-        }
-      } else if (data.type === 'userdisconnected') {
-        userControlRef.current.onUserRemoved(data.user_id);
-      } else if (data.type === 'sendsdp') {
-        participants.set((ps) =>
-          ps.map((p) => {
-            if (p.user_id !== data.sender) return p;
-            return { ...p, video_on: true };
-          })
-        );
-        getOrCreatePeerConnection(connections, data.sender).then(
-          async (connection) => {
-            connection.ontrack = (e) => {
-              console.log(e.streams);
-              remoteStreams.set((p) => [
-                ...p.filter((_) => _.userId !== data.sender),
-                { userId: data.sender, stream: e.streams[0] },
-              ]);
-            };
-            await connection.setRemoteDescription({
-              sdp: data.sdp,
-              type: data.sdp_type,
-            });
-            const answer = await connection.createAnswer();
-            await connection.setLocalDescription(answer);
-            addOnIceCandidate(connection, ws, { ...data });
-
-            connections.set((p) => ({
-              ...p,
-              [data.sender]: { connection, offer: answer },
-            }));
-            ws.sendMessage({
-              type: 'answersdp',
-              sender: user.userId,
-              receiver: data.sender,
-              sdp: answer.sdp,
-              sdp_type: answer.type,
+        // if (videoStream.ref.current) {
+        sendOfferToParticipant({
+          // stream: videoStream.ref.current,
+          participant,
+          websocket: ws,
+          connections,
+          user,
+          streams: remoteStreams,
+        }).then((connection) => {
+          if (videoStream.ref.current) {
+            console.log('send track to late user');
+            addStreamToConnection({
+              connection,
+              stream: videoStream.ref.current,
             });
           }
-        );
+        });
+        // }
+      } else if (data.type === 'userdisconnected') {
+        userControlRef.current.onUserRemoved(data.sender);
+        const entries = Object.entries(connections.get.current)
+          .map(([userId, { connection }]) => {
+            if (userId === data.sender) {
+              connection.close();
+              return undefined;
+            }
+            return [userId, { connection }] as const;
+          })
+          .filter((values) => values !== undefined);
+        connections.set(Object.fromEntries(entries));
+      } else if (data.type === 'sendsdp') {
+        answerOfferToParticipants({
+          websocket: ws,
+          data,
+          user: user,
+          streams: remoteStreams,
+          connections,
+        });
       } else if (data.type === 'answersdp') {
-        (async () => {
-          connections.get.current[data.sender].connection.setRemoteDescription({
-            sdp: data.sdp,
-            type: data.sdp_type,
-          });
-        })();
+        connections.get.current[data.sender].connection.setRemoteDescription({
+          sdp: data.sdp,
+          type: data.sdp_type,
+        });
       } else if (data.type === 'sendcandidate') {
         const interval = setInterval(() => {
-          if (!connections.get.current[data.sender]) return;
-          console.log('add icecandidate');
-          connections.get.current[data.sender].connection.addIceCandidate(
-            data.candidate
+          const connection = connections.get.current[data.sender].connection;
+          if (!connection) return;
+          connection.addIceCandidate(data.candidate);
+          handleParticipantStreamStatus(
+            participants,
+            data.sender,
+            'video',
+            true
           );
           clearInterval(interval);
         }, 1000);
       } else if (data.type === 'streamstatus') {
-        participants.set((ps) =>
-          ps.map((p) => {
-            if (p.user_id !== data.sender) return p;
-            if (data.media === 'video') return { ...p, video_on: data.status };
-            return { ...p, audio_on: data.status };
-          })
+        handleParticipantStreamStatus(
+          participants,
+          data.sender,
+          data.media,
+          data.status
         );
       }
     });
@@ -321,7 +410,6 @@ const RoomContainer: React.FC<{
       },
       onUserRemoved: (userId) => {
         participants.set((p) => {
-          console.log(p);
           return p.filter((pp) => pp.user_id !== userId);
         });
       },
@@ -435,17 +523,22 @@ const WebRTCController: React.FC<{
           sender: user.userId,
           status: true,
         });
-        participants
-          .filter((p) => p.user_id !== user.userId)
-          .forEach((participant) => {
-            connectStreamToUser({
-              participant,
-              stream: _stream,
-              websocket,
-              user,
-              connections,
-            });
-          });
+        Object.entries(connections.get.current).forEach(
+          ([userId, { connection }]) => {
+            addStreamToConnection({ stream: _stream, connection });
+          }
+        );
+        // participants
+        //   .filter((p) => p.user_id !== user.userId)
+        //   .forEach((participant) => {
+        //     connectStreamToUser({
+        //       participant,
+        //       stream: _stream,
+        //       websocket,
+        //       user,
+        //       connections,
+        //     });
+        //   });
       });
     };
 

@@ -19,8 +19,7 @@ export const useUserStore = create(
       setUserId: (userId) => set((p) => ({ ...p, userId })),
     }),
     {
-      name: 'user-storage',
-      storage: createJSONStorage(() => sessionStorage),
+      name: 'user-storage/v2',
     }
   )
 );

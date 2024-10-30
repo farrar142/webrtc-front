@@ -7,12 +7,12 @@ export type AuthenticationResult = {
 
 export type NotifyParticipant = {
   type: 'notifyparticipant';
-  user_id: string;
+  sender: string;
   username: string;
 };
 export type UserDisconnected = {
   type: 'userdisconnected';
-  user_id: string;
+  sender: string;
 };
 export type SendSDP = {
   type: 'sendsdp' | 'answersdp';
