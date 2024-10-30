@@ -1,3 +1,5 @@
+import { UseRefState } from '#/useRefState';
+
 // Websocket Message Type
 export type AuthenticationResult = {
   type: 'authentication';
@@ -34,6 +36,7 @@ export type StreamStatus = {
   media: 'video' | 'audio';
   status: boolean;
 };
+
 //User Control
 
 export type Participant = {
@@ -42,8 +45,19 @@ export type Participant = {
   audio_on: boolean;
   video_on: boolean;
 };
+
 export type UserController = {
   onUserAdd: (participant: Participant) => void;
   onUserRemoved: (userId: string) => void;
   // getParticipants: () => Participant[];
 };
+
+// User Defined Types
+
+export type Connection = {
+  connection: RTCPeerConnection;
+  tracks: { video: RTCRtpSender[]; audio: RTCRtpSender[] };
+  // offer: RTCSessionDescriptionInit;
+};
+export type ConnectionMap = Record<string, Connection>;
+export type ConnectionState = UseRefState<ConnectionMap>;

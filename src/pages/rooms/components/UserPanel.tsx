@@ -1,6 +1,6 @@
 import { Box, Stack, Typography } from '@mui/material';
-import { Participant } from './types';
-import { UseValue } from '#/useValue';
+import { Participant } from '../types';
+import { useValue, UseValue } from '#/useValue';
 import { createRef, useEffect } from 'react';
 
 export const UserDisplayPanel: React.FC<{
@@ -25,30 +25,26 @@ const UserPanel: React.FC<{
 }> = ({ participant, remoteStream }) => {
   const videoRef = createRef<HTMLVideoElement>();
   const audioRef = createRef<HTMLAudioElement>();
+  const media = useValue<{ audio: boolean; video: boolean }>({
+    audio: false,
+    video: false,
+  });
   useEffect(() => {
     if (!remoteStream || !videoRef.current || !audioRef.current) return;
     const video = videoRef.current;
     const audio = audioRef.current;
-    // console.log(remoteStream);
-    // console.log(participant);
-    // if (participant.video_on) videoRef.current.srcObject = remoteStream.stream;
-    // else videoRef.current.srcObject = null;
-
-    remoteStream.stream.getTracks().forEach((track) => {
-      let isVideo = false;
-      let isAudio = true;
-      if (track.kind === 'video') {
-        isVideo = true;
-        video.srcObject = new MediaStream([track]);
-      } else if (track.kind === 'audio') {
-        isAudio = true;
-        audio.srcObject = new MediaStream([track]);
-      }
-    });
+    const isVideoStream = Boolean(
+      remoteStream.stream.getTracks().find((track) => track.kind === 'video')
+    );
+    const isAudioStream =
+      remoteStream.stream.getTracks().length === 1 &&
+      remoteStream.stream.getTracks().filter((t) => t.kind === 'audio')
+        .length === 1;
+    if (isVideoStream) video.srcObject = remoteStream.stream;
+    if (isAudioStream) audio.srcObject = remoteStream.stream;
     remoteStream.stream.onremovetrack = (e) => {
-      console.log('on ended', e.track.kind);
-      if (e.track.kind === 'video') video.srcObject = null;
-      if (e.track.kind === 'audio') audio.srcObject = null;
+      if (isVideoStream) video.srcObject === null;
+      if (isAudioStream) audio.srcObject === null;
     };
   }, [remoteStream]);
   return (

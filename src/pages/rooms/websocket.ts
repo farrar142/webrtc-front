@@ -11,8 +11,8 @@ type WebSocketEvents =
   | NotifyParticipant
   | UserDisconnected
   | SendSDP
-  | SendCandidate
-  | StreamStatus;
+  | SendCandidate;
+//   | StreamStatus;
 export class CustomWebSocket extends WebSocket {
   parseMessage(events: (events: WebSocketEvents) => void) {
     this.onmessage = (e) => {
