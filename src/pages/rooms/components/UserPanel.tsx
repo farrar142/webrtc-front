@@ -1,7 +1,7 @@
 import { Box, Stack, Typography } from '@mui/material';
 import { Participant } from '../types';
 import { useValue, UseValue } from '#/useValue';
-import { createRef, useEffect } from 'react';
+import { createRef, useEffect, useMemo } from 'react';
 
 export const UserDisplayPanel: React.FC<{
   participants: Participant[];
@@ -19,34 +19,61 @@ export const UserDisplayPanel: React.FC<{
     </Stack>
   );
 };
+
 const UserPanel: React.FC<{
   participant: Participant;
   remoteStream: { userId: string; stream: MediaStream } | undefined;
 }> = ({ participant, remoteStream }) => {
   const videoRef = createRef<HTMLVideoElement>();
+  const vidAudioRef = createRef<HTMLAudioElement>();
   const audioRef = createRef<HTMLAudioElement>();
-  const media = useValue<{ audio: boolean; video: boolean }>({
-    audio: false,
-    video: false,
-  });
-  useEffect(() => {
-    if (!remoteStream || !videoRef.current || !audioRef.current) return;
-    const video = videoRef.current;
-    const audio = audioRef.current;
-    const isVideoStream = Boolean(
-      remoteStream.stream.getTracks().find((track) => track.kind === 'video')
-    );
-    const isAudioStream =
-      remoteStream.stream.getTracks().length === 1 &&
+  const isVideoOn = useValue(false);
+  const isAudioOn = useValue(false);
+
+  const isVideoStream = useMemo(
+    () =>
+      Boolean(
+        remoteStream?.stream.getTracks().find((track) => track.kind === 'video')
+      ),
+    [remoteStream]
+  );
+  const isAudioStream = useMemo(
+    () =>
+      remoteStream?.stream.getTracks().length === 1 &&
       remoteStream.stream.getTracks().filter((t) => t.kind === 'audio')
-        .length === 1;
-    if (isVideoStream) video.srcObject = remoteStream.stream;
-    if (isAudioStream) audio.srcObject = remoteStream.stream;
+        .length === 1,
+    [remoteStream]
+  );
+
+  useEffect(() => {
+    if (!remoteStream || !videoRef.current || !vidAudioRef.current) return;
+    if (!isVideoStream) return;
+    isVideoOn.set(true);
+    const video = videoRef.current;
+    const vidAudio = vidAudioRef.current;
+    remoteStream.stream.getTracks().forEach((track) => {
+      if (track.kind === 'video') video.srcObject = new MediaStream([track]);
+      if (track.kind === 'audio') vidAudio.srcObject = new MediaStream([track]);
+    });
+    video.srcObject = remoteStream.stream;
     remoteStream.stream.onremovetrack = (e) => {
-      if (isVideoStream) video.srcObject === null;
-      if (isAudioStream) audio.srcObject === null;
+      isVideoOn.set(false);
+      video.srcObject = null;
     };
-  }, [remoteStream]);
+  }, [isVideoStream, remoteStream?.stream.id]);
+
+  useEffect(() => {
+    if (!remoteStream || !audioRef.current) return;
+    if (!isAudioStream) return;
+    isAudioOn.set(true);
+    const audio = audioRef.current;
+    audio.srcObject = remoteStream.stream;
+    remoteStream.stream.onremovetrack = (e) => {
+      isAudioOn.set(false);
+      audio.srcObject = null;
+    };
+  }, [isAudioStream, remoteStream?.stream.id]);
+
   return (
     <Box>
       <Typography>{participant.username}</Typography>
@@ -54,9 +81,10 @@ const UserPanel: React.FC<{
         ref={videoRef}
         autoPlay
         muted
-        // playsInline
+        playsInline
         style={{ width: '200px', height: '200px', border: '1px solid red' }}
       />
+      <audio ref={vidAudioRef} autoPlay />
       <audio ref={audioRef} autoPlay />
     </Box>
   );
