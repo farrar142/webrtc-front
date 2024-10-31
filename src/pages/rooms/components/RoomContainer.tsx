@@ -67,11 +67,23 @@ export const RoomContainer: React.FC<{
         >
           <ChatPanel websocket={websocket} chatOpen={chatOpen} />
         </Collapse>
-        <BackgroundVideoContainer
-          changeUserStream={changeUserStream}
-          selectedUser={selectedUser}
-          participants={participants}
-        />
+        <Box flex={1} className='flex' position='relative'>
+          <BackgroundVideoContainer
+            changeUserStream={changeUserStream}
+            selectedUser={selectedUser}
+            participants={participants}
+          />
+          <WebRTCController
+            chatOpen={chatOpen}
+            videoStream={videoStream}
+            audioStream={audioStream}
+            // audioRef={audioRef}
+            // videoRef={videoRef}
+            connections={connections}
+            websocket={websocket}
+            participants={participants.get}
+          />
+        </Box>
         <UserDisplayPanel
           participants={participants.get}
           myStream={videoStream}
@@ -80,16 +92,6 @@ export const RoomContainer: React.FC<{
           changeUserStream={changeUserStream}
         />
       </Box>
-      <WebRTCController
-        chatOpen={chatOpen}
-        videoStream={videoStream}
-        audioStream={audioStream}
-        // audioRef={audioRef}
-        // videoRef={videoRef}
-        connections={connections}
-        websocket={websocket}
-        participants={participants.get}
-      />
     </Box>
   );
 };

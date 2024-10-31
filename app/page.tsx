@@ -60,21 +60,8 @@ export default function Home() {
             value={roomname.get}
             onChange={roomname.onTextChange}
           />
-          <TextField
-            label='Password'
-            name='password'
-            size='small'
-            value={password.get}
-            onChange={password.onTextChange}
-          />
-          <TextField
-            label='Username'
-            name='username'
-            size='small'
-            onChange={({ target: { value } }) => user.setUsername(value)}
-          />
           <Button variant='contained' type='submit'>
-            Confirm
+            Move
           </Button>
         </Stack>
       </Paper>
