@@ -4,9 +4,9 @@ import { useRoomStore } from '#/atoms/useRoomStore';
 import { useUserStore } from '#/atoms/useUserId';
 import { useRefState } from '#/useRefState';
 import { useValue } from '#/useValue';
-import { Box } from '@mui/material';
+import { Box, Button, Container, Paper, Stack, TextField } from '@mui/material';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { FormEventHandler, useEffect, useRef } from 'react';
 import { v4 } from 'uuid';
 import { RoomContainer } from './components/RoomContainer';
 import {
@@ -22,7 +22,6 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
   const router = useRouter();
   const user = useUserStore();
   const roomStore = useRoomStore();
-  const password = roomStore.roomInfo[room];
   const authenticated = useValue(false);
   const websocket = useValue<CustomWebSocket | undefined>(undefined);
   const connections = useRefState<ConnectionMap>({});
@@ -59,14 +58,14 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
       process.env.NEXT_PUBLIC_BACKEND_URL + '/ws/rooms/' + room + '/'
     );
     ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          type: 'authentication',
-          password: password,
-          user_id: user.userId,
-          username: user.username,
-        })
-      );
+      // ws.send(
+      //   JSON.stringify({
+      //     type: 'authentication',
+      //     password: password,
+      //     user_id: user.userId,
+      //     username: user.username,
+      //   })
+      // );
     };
     ws.parseMessage((data) => {
       if (data.type === 'authentication') {
@@ -173,9 +172,20 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
     });
     websocket.set(ws);
     return () => ws.close();
-  }, [password, user.userId]);
-  if (!authenticated.get) return <></>;
+  }, [user.userId]);
+
+  const onLogin = ({ password }: { password: string }) => {
+    websocket.get?.send(
+      JSON.stringify({
+        type: 'authentication',
+        password: password,
+        user_id: user.userId,
+        username: user.username,
+      })
+    );
+  };
   if (!websocket.get) return <></>;
+  if (!authenticated.get) return <LoginContainer onLogin={onLogin} />;
   return (
     <Box
       width='100%'
@@ -191,5 +201,49 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
         participants={participants}
       />
     </Box>
+  );
+};
+
+const LoginContainer: React.FC<{
+  onLogin: (args: { password: string }) => void;
+}> = ({ onLogin }) => {
+  const user = useUserStore();
+  const password = useValue('');
+
+  const onSubmit: FormEventHandler = (e) => {
+    e.preventDefault();
+    onLogin({ password: password.get });
+  };
+  return (
+    <Container
+      sx={(theme) => ({
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100%',
+        bgcolor: theme.palette.background.default,
+      })}
+    >
+      <Paper sx={{ p: 1 }}>
+        <Stack spacing={1} component='form' onSubmit={onSubmit}>
+          <TextField
+            label='Password'
+            name='password'
+            size='small'
+            value={password.get}
+            onChange={password.onTextChange}
+          />
+          <TextField
+            label='Username'
+            name='username'
+            size='small'
+            onChange={({ target: { value } }) => user.setUsername(value)}
+          />
+          <Button variant='contained' type='submit'>
+            Confirm
+          </Button>
+        </Stack>
+      </Paper>
+    </Container>
   );
 };

@@ -54,7 +54,7 @@ export const BackgroundVideoContainer: React.FC<{
   }, [participants.get, selectedUser.get.user_id]);
 
   return (
-    <Box flex={1} display='flex' justifyContent='center' alignItems='center'>
+    <Box flex={1} className='flex'>
       <video
         ref={videoRef}
         style={{
@@ -83,7 +83,13 @@ export const BackgroundVideoContainer: React.FC<{
             justifyContent: 'center',
           })}
         >
-          <Box className='single-line' width='50%'>
+          <Box
+            className='single-line'
+            width='50%'
+            display='flex'
+            alignItems='center'
+            justifyContent='center'
+          >
             <Typography>{selectedUser.get.username}</Typography>
           </Box>
         </Box>
