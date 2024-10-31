@@ -1,7 +1,13 @@
 import { useUserStore } from '#/atoms/useUserId';
 import { UseRefState } from '#/useRefState';
 import { UseValue } from '#/useValue';
-import { Tv, VideoCall, KeyboardVoice, MicOff } from '@mui/icons-material';
+import {
+  Tv,
+  VideoCall,
+  KeyboardVoice,
+  MicOff,
+  ChatBubble,
+} from '@mui/icons-material';
 import { Paper, Tooltip, IconButton } from '@mui/material';
 import { RefObject, useEffect } from 'react';
 import { addStreamToConnection } from '../connections';
@@ -16,6 +22,7 @@ export const WebRTCController: React.FC<{
   connections: UseRefState<Record<string, Connection>>;
   websocket: CustomWebSocket;
   participants: Participant[];
+  chatOpen: UseValue<boolean>;
 }> = ({
   videoStream,
   videoRef,
@@ -24,6 +31,7 @@ export const WebRTCController: React.FC<{
   participants,
   audioStream,
   audioRef,
+  chatOpen,
 }) => {
   const user = useUserStore();
 
@@ -98,13 +106,18 @@ export const WebRTCController: React.FC<{
   return (
     <Paper
       sx={{
-        borderRadius: 3,
+        borderRadius: 5,
         position: 'absolute',
         bottom: '5%',
         left: '50%',
         transform: 'translate(-50%)',
       }}
     >
+      <Tooltip title='채팅'>
+        <IconButton onClick={chatOpen.wrap(!chatOpen.get)}>
+          <ChatBubble />
+        </IconButton>
+      </Tooltip>
       <Tooltip title='화면 공유'>
         <IconButton
           onClick={onVideoStreamStart(getDisplayMedia, {

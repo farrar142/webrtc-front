@@ -15,14 +15,32 @@ export const UserDisplayPanel: React.FC<{
   remoteStreams: UseValue<{ userId: string; stream: MediaStream }[]>;
 }> = ({ participants, remoteStreams }) => {
   return (
-    <Stack spacing={1}>
+    <Stack
+      className='hide-scrollbar'
+      spacing={1}
+      sx={{
+        overflow: 'scroll',
+        maxHeight: '100%',
+      }}
+    >
       {participants.map((p) => (
         <UserPanel
           key={p.user_id}
           participant={p}
           remoteStream={remoteStreams.get.find((rs) => rs.userId === p.user_id)}
-        ></UserPanel>
+        />
       ))}
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
+      <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
     </Stack>
   );
 };
@@ -87,8 +105,8 @@ const UserPanel: React.FC<{
     <Box
       position='relative'
       width='100%'
-      maxWidth='100px'
-      sx={{ aspectRatio: 1 }}
+      maxWidth='150px'
+      sx={{ aspectRatio: 16 / 9 }}
     >
       <video
         ref={videoRef}

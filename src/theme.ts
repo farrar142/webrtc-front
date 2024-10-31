@@ -9,4 +9,5 @@ const theme = createTheme({
     mode: 'dark',
   },
 });
+console.log(theme);
 export default theme;

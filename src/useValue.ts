@@ -11,11 +11,15 @@ export const useValue = <T extends any>(defaultValue: T) => {
     set(value);
   };
 
+  const wrap = (value: T) => () => {
+    set(value);
+  };
+
   useEffect(() => {
     ref.current = get;
   }, [get]);
 
-  return { get, set, onTextChange, ref };
+  return { get, set, onTextChange, wrap, ref };
 };
 
 export type UseValue<T> = ReturnType<typeof useValue<T>>;

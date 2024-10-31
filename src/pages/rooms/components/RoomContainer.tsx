@@ -1,11 +1,12 @@
 import { UseRefState } from '#/useRefState';
-import { UseValue } from '#/useValue';
-import { Box } from '@mui/material';
+import { useValue, UseValue } from '#/useValue';
+import { Box, Collapse } from '@mui/material';
 import { MutableRefObject, createRef, useImperativeHandle } from 'react';
 import { UserController, ConnectionMap, Participant } from '../types';
 import { UserDisplayPanel } from './UserPanel';
 import { CustomWebSocket } from '../websocket';
 import { WebRTCController } from './WebRTCController';
+import { ChatPanel } from './ChatPanel';
 
 export const RoomContainer: React.FC<{
   userControlRef: MutableRefObject<UserController>;
@@ -24,6 +25,7 @@ export const RoomContainer: React.FC<{
   videoStream,
   participants,
 }) => {
+  const chatOpen = useValue(true);
   const videoRef = createRef<HTMLVideoElement>();
   const audioRef = createRef<HTMLAudioElement>();
   useImperativeHandle(
@@ -43,13 +45,27 @@ export const RoomContainer: React.FC<{
     [participants.get]
   );
   return (
-    <Box width='100%' height='100%'>
-      <Box width='100%' display='flex' flexDirection='row'>
-        <Box>chat</Box>
+    <Box width='100%' height='100%' maxHeight='100%'>
+      <Box width='100%' maxHeight='100%' display='flex' flexDirection='row'>
+        <Collapse
+          in={chatOpen.get}
+          orientation='horizontal'
+          sx={{ maxHeight: '100%' }}
+        >
+          <ChatPanel websocket={websocket} chatOpen={chatOpen} />
+        </Collapse>
         <Box flex={1}>
           <video
             ref={videoRef}
-            style={{ width: '200px', height: '200px', border: '1px solid red' }}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              margin: 0,
+              padding: 0,
+              height: 'auto',
+              width: '100%',
+              objectFit: 'fill',
+            }}
             autoPlay
             muted
           />
@@ -61,6 +77,7 @@ export const RoomContainer: React.FC<{
         />
       </Box>
       <WebRTCController
+        chatOpen={chatOpen}
         videoStream={videoStream}
         audioStream={audioStream}
         audioRef={audioRef}
