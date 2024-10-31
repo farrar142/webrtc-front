@@ -61,3 +61,17 @@ export type Connection = {
 };
 export type ConnectionMap = Record<string, Connection>;
 export type ConnectionState = UseRefState<ConnectionMap>;
+
+// Viewer Control Types
+
+export type ChangeUserStreamFunc = ({
+  videoStream,
+  // vidAudioStream,
+  // audioStream,
+  participant,
+}: {
+  videoStream: MediaStream | undefined;
+  // vidAudioStream: MediaStream | undefined;
+  // audioStream: MediaStream | undefined;
+  participant: Participant;
+}) => void;

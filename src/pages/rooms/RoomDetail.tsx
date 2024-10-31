@@ -31,10 +31,18 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
   const videoStream = useValue<MediaStream | undefined>(undefined);
   const audioStream = useValue<MediaStream | undefined>(undefined);
 
-  const userControlRef = useRef<UserController>({
-    onUserAdd: () => {},
-    onUserRemoved: () => {},
-  });
+  const userControl = {
+    onUserAdd: (participant: Participant) =>
+      participants.set((ps) => {
+        if (ps.find((p) => p.user_id === participant.user_id)) return ps;
+        return [...ps, participant];
+      }),
+    onUserRemoved: (userId: string) => {
+      participants.set((p) => {
+        return p.filter((pp) => pp.user_id !== userId);
+      });
+    },
+  };
 
   useEffect(() => {
     // zustand persist
@@ -71,7 +79,7 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
           });
           for (const participant of data.data) {
             setTimeout(() => {
-              userControlRef.current.onUserAdd(participant);
+              userControl.onUserAdd(participant);
             }, 100);
           }
         } else {
@@ -85,7 +93,7 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
           audio_on: false,
           video_on: false,
         };
-        userControlRef.current.onUserAdd(participant);
+        userControl.onUserAdd(participant);
         // if (videoStream.ref.current) {
         sendOfferToParticipant({
           // stream: videoStream.ref.current,
@@ -116,7 +124,7 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
         });
         // }
       } else if (data.type === 'userdisconnected') {
-        userControlRef.current.onUserRemoved(data.sender);
+        userControl.onUserRemoved(data.sender);
         const entries = Object.entries(connections.get.current)
           .map(([userId, { connection, tracks }]) => {
             if (userId === data.sender) {
@@ -175,7 +183,6 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
       bgcolor={(theme) => theme.palette.background.default}
     >
       <RoomContainer
-        userControlRef={userControlRef}
         connections={connections}
         remoteStreams={remoteStreams}
         videoStream={videoStream}

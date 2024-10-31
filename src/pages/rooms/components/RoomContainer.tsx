@@ -1,15 +1,27 @@
 import { UseRefState } from '#/useRefState';
 import { useValue, UseValue } from '#/useValue';
 import { Box, Collapse } from '@mui/material';
-import { MutableRefObject, createRef, useImperativeHandle } from 'react';
-import { UserController, ConnectionMap, Participant } from '../types';
+import {
+  MutableRefObject,
+  createRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from 'react';
+import {
+  UserController,
+  ConnectionMap,
+  Participant,
+  ChangeUserStreamFunc,
+} from '../types';
 import { UserDisplayPanel } from './UserPanel';
 import { CustomWebSocket } from '../websocket';
 import { WebRTCController } from './WebRTCController';
 import { ChatPanel } from './ChatPanel';
+import { BackgroundVideoContainer } from './BackgroundVideoContainer';
+import { useUserStore } from '#/atoms/useUserId';
 
 export const RoomContainer: React.FC<{
-  userControlRef: MutableRefObject<UserController>;
   connections: UseRefState<ConnectionMap>;
   remoteStreams: UseValue<{ userId: string; stream: MediaStream }[]>;
   videoStream: UseValue<MediaStream | undefined>;
@@ -17,7 +29,6 @@ export const RoomContainer: React.FC<{
   participants: UseValue<Participant[]>;
   websocket: CustomWebSocket;
 }> = ({
-  userControlRef,
   connections,
   remoteStreams,
   websocket,
@@ -25,25 +36,27 @@ export const RoomContainer: React.FC<{
   videoStream,
   participants,
 }) => {
+  const user = useUserStore();
   const chatOpen = useValue(true);
-  const videoRef = createRef<HTMLVideoElement>();
-  const audioRef = createRef<HTMLAudioElement>();
-  useImperativeHandle(
-    userControlRef,
-    () => ({
-      onUserAdd: (participant) => {
-        if (participants.get.find((p) => p.user_id === participant.user_id))
-          return;
-        participants.set((p) => [...p, participant]);
-      },
-      onUserRemoved: (userId) => {
-        participants.set((p) => {
-          return p.filter((pp) => pp.user_id !== userId);
-        });
-      },
-    }),
-    [participants.get]
-  );
+  const selectedUser = useValue<Participant>({
+    user_id: user.userId,
+    username: user.username,
+    video_on: false,
+    audio_on: false,
+  });
+  const changeUserStream = useRef<ChangeUserStreamFunc>(() => () => {});
+  //   useEffect(() => {
+  //     if (selectedUser.get.user_id !== user.userId) return;
+  //     changeUserStream.current({
+  //       videoStream: videoStream.get,
+  //       participant: {
+  //         user_id: user.userId,
+  //         username: user.username,
+  //         audio_on: false,
+  //         video_on: false,
+  //       },
+  //     });
+  //   }, [selectedUser.get, user.userId]);
   return (
     <Box width='100%' height='100%' maxHeight='100%'>
       <Box width='100%' maxHeight='100%' display='flex' flexDirection='row'>
@@ -54,34 +67,25 @@ export const RoomContainer: React.FC<{
         >
           <ChatPanel websocket={websocket} chatOpen={chatOpen} />
         </Collapse>
-        <Box flex={1}>
-          <video
-            ref={videoRef}
-            style={{
-              maxWidth: '100%',
-              maxHeight: '100%',
-              margin: 0,
-              padding: 0,
-              height: 'auto',
-              width: '100%',
-              objectFit: 'fill',
-            }}
-            autoPlay
-            muted
-          />
-          <audio ref={audioRef} autoPlay muted />
-        </Box>
+        <BackgroundVideoContainer
+          changeUserStream={changeUserStream}
+          selectedUser={selectedUser}
+          participants={participants}
+        />
         <UserDisplayPanel
           participants={participants.get}
+          myStream={videoStream}
           remoteStreams={remoteStreams}
+          selectedUser={selectedUser}
+          changeUserStream={changeUserStream}
         />
       </Box>
       <WebRTCController
         chatOpen={chatOpen}
         videoStream={videoStream}
         audioStream={audioStream}
-        audioRef={audioRef}
-        videoRef={videoRef}
+        // audioRef={audioRef}
+        // videoRef={videoRef}
         connections={connections}
         websocket={websocket}
         participants={participants.get}

@@ -1,7 +1,13 @@
 import { Box, IconButton, Stack, Typography } from '@mui/material';
-import { Participant } from '../types';
+import { ChangeUserStreamFunc, Participant } from '../types';
 import { useValue, UseValue } from '#/useValue';
-import { createRef, useEffect, useMemo } from 'react';
+import {
+  createRef,
+  MutableRefObject,
+  RefObject,
+  useEffect,
+  useMemo,
+} from 'react';
 import {
   Camera,
   KeyboardVoice,
@@ -9,11 +15,22 @@ import {
   Tv,
   VideoCall,
 } from '@mui/icons-material';
+import { useUserStore } from '#/atoms/useUserId';
 
 export const UserDisplayPanel: React.FC<{
   participants: Participant[];
   remoteStreams: UseValue<{ userId: string; stream: MediaStream }[]>;
-}> = ({ participants, remoteStreams }) => {
+  myStream: UseValue<MediaStream | undefined>;
+  selectedUser: UseValue<Participant>;
+  changeUserStream: MutableRefObject<ChangeUserStreamFunc>;
+}> = ({
+  participants,
+  remoteStreams,
+  myStream,
+  selectedUser,
+  changeUserStream,
+}) => {
+  const user = useUserStore();
   return (
     <Stack
       className='hide-scrollbar'
@@ -23,13 +40,36 @@ export const UserDisplayPanel: React.FC<{
         maxHeight: '100%',
       }}
     >
-      {participants.map((p) => (
-        <UserPanel
-          key={p.user_id}
-          participant={p}
-          remoteStream={remoteStreams.get.find((rs) => rs.userId === p.user_id)}
-        />
-      ))}
+      <UserPanel
+        selectedUser={selectedUser}
+        participant={{
+          user_id: user.userId,
+          username: user.username,
+          audio_on: false,
+          video_on: false,
+        }}
+        remoteStreams={remoteStreams}
+        remoteStream={
+          myStream.get
+            ? { stream: myStream.get, userId: user.userId }
+            : undefined
+        }
+        changeUserStream={changeUserStream}
+      />
+      {participants
+        .filter((p) => p.user_id !== user.userId)
+        .map((p) => (
+          <UserPanel
+            selectedUser={selectedUser}
+            key={p.user_id}
+            participant={p}
+            remoteStreams={remoteStreams}
+            remoteStream={remoteStreams.get.find(
+              (rs) => rs.userId === p.user_id
+            )}
+            changeUserStream={changeUserStream}
+          />
+        ))}
       <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
       <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
       <Box width='150px' sx={{ aspectRatio: 16 / 9 }} />
@@ -47,15 +87,23 @@ export const UserDisplayPanel: React.FC<{
 
 const UserPanel: React.FC<{
   participant: Participant;
+  remoteStreams: UseValue<{ userId: string; stream: MediaStream }[]>;
   remoteStream: { userId: string; stream: MediaStream } | undefined;
-}> = ({ participant, remoteStream }) => {
+  selectedUser: UseValue<Participant>;
+  changeUserStream: MutableRefObject<ChangeUserStreamFunc>;
+}> = ({
+  participant,
+  remoteStreams,
+  remoteStream,
+  selectedUser,
+  changeUserStream,
+}) => {
+  const user = useUserStore();
   const videoRef = createRef<HTMLVideoElement>();
   const vidAudioRef = createRef<HTMLAudioElement>();
   const audioRef = createRef<HTMLAudioElement>();
   const videoStream = useValue<MediaStream | undefined>(undefined);
   const audioStream = useValue<MediaStream | undefined>(undefined);
-  const isVideoOn = useValue(false);
-  const isAudioOn = useValue(false);
 
   const isVideoStream = useMemo(
     () =>
@@ -83,10 +131,16 @@ const UserPanel: React.FC<{
       if (track.kind === 'audio') vidAudio.srcObject = new MediaStream([track]);
     });
     video.srcObject = remoteStream.stream;
-    remoteStream.stream.onremovetrack = (e) => {
+    remoteStream.stream.addEventListener('customremovetrack', () => {
+      console.log('customremovetrack');
       videoStream.set(undefined);
       video.srcObject = null;
-    };
+    });
+    remoteStream.stream.addEventListener('removetrack', (e) => {
+      console.log('remove video track');
+      videoStream.set(undefined);
+      video.srcObject = null;
+    });
   }, [isVideoStream, remoteStream?.stream.id]);
 
   useEffect(() => {
@@ -95,18 +149,31 @@ const UserPanel: React.FC<{
     audioStream.set(remoteStream.stream);
     const audio = audioRef.current;
     audio.srcObject = remoteStream.stream;
-    remoteStream.stream.onremovetrack = (e) => {
+    remoteStream.stream.addEventListener('removetrack', (e) => {
       audioStream.set(undefined);
       audio.srcObject = null;
-    };
+    });
   }, [isAudioStream, remoteStream?.stream.id]);
+
+  useEffect(() => {
+    if (selectedUser.get.user_id !== participant.user_id) return;
+    // if (selectedUser.get.user_id === user.userId) return; //Room Container에서 처리
+
+    changeUserStream.current({
+      videoStream:
+        videoStream.get && videoStream.get.active ? videoStream.get : undefined,
+      // audioStream: audioStream.get,
+      participant,
+    });
+  }, [selectedUser.get.user_id, videoStream.get, audioStream.get]);
 
   return (
     <Box
       position='relative'
       width='100%'
       maxWidth='150px'
-      sx={{ aspectRatio: 16 / 9 }}
+      sx={{ aspectRatio: 16 / 9, cursor: 'pointer' }}
+      onClick={selectedUser.wrap(participant)}
     >
       <video
         ref={videoRef}
@@ -120,7 +187,7 @@ const UserPanel: React.FC<{
           objectFit: 'cover',
         }}
       />
-      <audio ref={vidAudioRef} autoPlay />
+      <audio ref={vidAudioRef} autoPlay muted />
       <audio ref={audioRef} autoPlay />
       <Box
         // 유저 이름
