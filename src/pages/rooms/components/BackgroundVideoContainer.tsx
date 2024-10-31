@@ -1,4 +1,4 @@
-import { Box } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { createRef, RefObject, useEffect, useImperativeHandle } from 'react';
 import { ChangeUserStreamFunc, Participant } from '../types';
 import { useValue, UseValue } from '#/useValue';
@@ -70,6 +70,24 @@ export const BackgroundVideoContainer: React.FC<{
         autoPlay
         muted
       />
+      {!Boolean(stream.get) && (
+        <Box
+          sx={(theme) => ({
+            maxWidth: 200,
+            aspectRatio: 1,
+            borderRadius: 100,
+            bgcolor: theme.palette.action.hover,
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          })}
+        >
+          <Box className='single-line' width='50%'>
+            <Typography>{selectedUser.get.username}</Typography>
+          </Box>
+        </Box>
+      )}
       <audio ref={vidAudioRef} autoPlay />
       {/* <audio ref={audioRef} autoPlay muted /> */}
     </Box>
