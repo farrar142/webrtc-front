@@ -17,8 +17,19 @@ import {
 } from './connections';
 import { ConnectionMap, Participant, UserController } from './types';
 import { CustomWebSocket } from './websocket';
+import { useSnackbar } from 'notistack';
+
+import { SnackbarProvider } from 'notistack';
 
 export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
+  return (
+    <SnackbarProvider>
+      <RoomDetailInner room={room} />
+    </SnackbarProvider>
+  );
+};
+const RoomDetailInner: React.FC<{ room: string }> = ({ room }) => {
+  const { enqueueSnackbar } = useSnackbar();
   const router = useRouter();
   const user = useUserStore();
   const roomStore = useRoomStore();
@@ -83,7 +94,10 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
           }
         } else {
           // Notification 해줘야됨
-          router.push('/');
+          enqueueSnackbar({
+            variant: 'warning',
+            message: '비밀번호가 틀립니다.',
+          });
         }
       } else if (data.type === 'notifyparticipant') {
         const participant = {
@@ -170,6 +184,9 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
       //   );
       // }
     });
+    ws.onclose = () => {
+      router.refresh();
+    };
     websocket.set(ws);
     return () => ws.close();
   }, [user.userId]);
@@ -187,20 +204,22 @@ export const RoomDetail: React.FC<{ room: string }> = ({ room }) => {
   if (!websocket.get) return <></>;
   if (!authenticated.get) return <LoginContainer onLogin={onLogin} />;
   return (
-    <Box
-      width='100%'
-      height='100%'
-      bgcolor={(theme) => theme.palette.background.default}
-    >
-      <RoomContainer
-        connections={connections}
-        remoteStreams={remoteStreams}
-        videoStream={videoStream}
-        audioStream={audioStream}
-        websocket={websocket.get}
-        participants={participants}
-      />
-    </Box>
+    <SnackbarProvider>
+      <Box
+        width='100%'
+        height='100%'
+        bgcolor={(theme) => theme.palette.background.default}
+      >
+        <RoomContainer
+          connections={connections}
+          remoteStreams={remoteStreams}
+          videoStream={videoStream}
+          audioStream={audioStream}
+          websocket={websocket.get}
+          participants={participants}
+        />
+      </Box>
+    </SnackbarProvider>
   );
 };
 

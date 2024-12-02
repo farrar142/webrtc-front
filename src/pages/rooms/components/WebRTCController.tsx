@@ -9,17 +9,54 @@ import {
   ChatBubble,
 } from '@mui/icons-material';
 import { Paper, Tooltip, IconButton } from '@mui/material';
-import { RefObject, useEffect } from 'react';
 import { addStreamToConnection } from '../connections';
 import { Connection, Participant } from '../types';
 import { CustomWebSocket } from '../websocket';
+import { enqueueSnackbar } from 'notistack';
+
+type ConnectionType = UseRefState<Record<string, Connection>>;
+
+const getUserMedia = () =>
+  navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: true,
+  });
+
+const getDisplayMedia = () =>
+  navigator.mediaDevices.getDisplayMedia({
+    audio: true,
+    video: true,
+  });
+
+const getAudioDevice = () =>
+  navigator.mediaDevices.getUserMedia({ audio: true });
+
+const onStreamEnded = (
+  stream: UseValue<MediaStream | undefined>,
+  media: 'video' | 'audio',
+  connections: ConnectionType
+) => {
+  const already = stream.get;
+
+  if (!already) return;
+  already.dispatchEvent(new Event('customremovetrack'));
+  already.getTracks().forEach((track) => {
+    track.stop();
+  });
+  Object.entries(connections.get.current).forEach(
+    ([userId, { connection, tracks }]) => {
+      tracks[media].forEach((sender) => connection.removeTrack(sender));
+    }
+  );
+  stream.set(undefined);
+};
 
 export const WebRTCController: React.FC<{
   videoStream: UseValue<MediaStream | undefined>;
   //   videoRef: RefObject<HTMLVideoElement>;
   audioStream: UseValue<MediaStream | undefined>;
   //   audioRef: RefObject<HTMLAudioElement>;
-  connections: UseRefState<Record<string, Connection>>;
+  connections: ConnectionType;
   websocket: CustomWebSocket;
   participants: Participant[];
   chatOpen: UseValue<boolean>;
@@ -34,37 +71,6 @@ export const WebRTCController: React.FC<{
   chatOpen,
 }) => {
   const user = useUserStore();
-  const onStreamEnded = (
-    stream: UseValue<MediaStream | undefined>,
-    media: 'video' | 'audio'
-  ) => {
-    const already = stream.get;
-
-    if (!already) return;
-    already.dispatchEvent(new Event('customremovetrack'));
-    already.getTracks().forEach((track) => {
-      track.stop();
-    });
-    Object.entries(connections.get.current).forEach(
-      ([userId, { connection, tracks }]) => {
-        tracks[media].forEach((sender) => connection.removeTrack(sender));
-      }
-    );
-    stream.set(undefined);
-  };
-  const getUserMedia = () =>
-    navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: true,
-    });
-  const getDisplayMedia = () =>
-    navigator.mediaDevices.getDisplayMedia({
-      audio: true,
-      video: true,
-    });
-  const getAudioDevice = () =>
-    navigator.mediaDevices.getUserMedia({ audio: true });
-
   const onVideoStreamStart =
     (
       streamPromise: () => Promise<MediaStream>,
@@ -72,28 +78,35 @@ export const WebRTCController: React.FC<{
         // ref,
         media,
         stream,
+        connections,
       }: {
-        // ref: RefObject<HTMLVideoElement> | RefObject<HTMLAudioElement>;
         media: 'video' | 'audio';
         stream: UseValue<MediaStream | undefined>;
+        connections: ConnectionType;
       }
     ) =>
     () => {
-      if (stream.get) return onStreamEnded(stream, media);
-      streamPromise().then((_stream) => {
-        stream.set(_stream);
-        // if (!ref.current) return;
-        // ref.current.srcObject = _stream;
-        Object.entries(connections.get.current).forEach(
-          ([userId, { connection, tracks }]) => {
-            const senders = addStreamToConnection({
-              stream: _stream,
-              connection,
-            });
-            tracks[media].push(...senders);
+      if (stream.get) return onStreamEnded(stream, media, connections);
+      streamPromise()
+        .then((_stream) => {
+          stream.set(_stream);
+          // if (!ref.current) return;
+          // ref.current.srcObject = _stream;
+          Object.entries(connections.get.current).forEach(
+            ([userId, { connection, tracks }]) => {
+              const senders = addStreamToConnection({
+                stream: _stream,
+                connection,
+              });
+              tracks[media].push(...senders);
+            }
+          );
+        })
+        .catch((e) => {
+          if (e.message && typeof e.message === 'string') {
+            enqueueSnackbar({ message: e.message, variant: 'error' });
           }
-        );
-      });
+        });
     };
 
   //   useEffect(() => {
@@ -124,7 +137,7 @@ export const WebRTCController: React.FC<{
           onClick={onVideoStreamStart(getDisplayMedia, {
             media: 'video',
             stream: videoStream,
-            // ref: videoRef,
+            connections,
           })}
           color={Boolean(videoStream.get) ? 'warning' : undefined}
         >
@@ -136,7 +149,7 @@ export const WebRTCController: React.FC<{
           onClick={onVideoStreamStart(getUserMedia, {
             media: 'video',
             stream: videoStream,
-            // ref: videoRef,
+            connections,
           })}
           color={Boolean(videoStream.get) ? 'warning' : undefined}
         >
@@ -148,7 +161,7 @@ export const WebRTCController: React.FC<{
           onClick={onVideoStreamStart(getAudioDevice, {
             media: 'audio',
             stream: audioStream,
-            // ref: audioRef,
+            connections,
           })}
           color={Boolean(audioStream.get) ? 'warning' : undefined}
         >
